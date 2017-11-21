@@ -8,11 +8,14 @@
     </div>
 </div>
 <div class="container main-container">
-    <select id="classify" onchange="update()">
-        {% for classification in classifications %}
-            <option value="{{ classification }}">{{ classification }}</option>
-        {% endfor %}
-    <select>
+    <div class="col-md-2 form-group">
+        <select id="classify" class="form-control" onchange="update()">
+                <option value="ALL" selected="selected">ALL</option>                
+            {% for classification in classifications %}
+                <option value="{{ classification }}">{{ classification }}</option>
+            {% endfor %}
+        </select>
+    </div>
     {% if errors %}
     <div class="container main-container">
         <div id='errors' class="row">
@@ -56,7 +59,7 @@
 {% endblock %}
 
 {% block scripts %}
-    <script src="{{ request.script_root }}/static/{{ ctf_theme() }}/js/vendor/plotly.min.js"></script>
-    <script src="{{ request.script_root }}/static/{{ ctf_theme() }}/js/utils.js"></script>
-    <script src="{{ request.script_root }}/static/{{ ctf_theme() }}/js/scoreboard.js"></script>
+    <script src="{{ request.script_root }}/themes/{{ ctf_theme() }}/static/js/vendor/plotly.min.js"></script>
+    <script src="{{ request.script_root }}/themes/{{ ctf_theme() }}/static/js/utils.js"></script>
+    <script src="{{ request.script_root }}/plugins/ctfd-classified-scoreboard-plugin/scoreboard.js"></script>
 {% endblock %}

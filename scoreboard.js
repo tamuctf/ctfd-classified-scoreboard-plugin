@@ -1,5 +1,9 @@
+$(document).ready(function(){
+  $("select").trigger('change');
+});
+
 function updatescores() {
-  if($('#classify').val()) {
+  if($('#classify').val() !== 'ALL') {
       $.get(script_root + '/scores/' + $('#classify').val(), function(data) {
         teams = $.parseJSON(JSON.stringify(data));
         $('#scoreboard > tbody').empty()
@@ -34,79 +38,107 @@ function UTCtoDate(utc) {
     return d;
 }
 
-function scoregraph() {
-    if($('#classify').val()) {
-      $.get(script_root + '/scores/' + $('#classify').val() + '/10', function(data) {
-        var scores = $.parseJSON(JSON.stringify(data));
-        scores = scores['scores'];
-        if(Object.keys(scores).length == 0) {
-          return;
-        }
 
-        var teams = Object.keys(scores);
-        var traces = [];
-        for(var i = 0; i < teams.length; i++) {
+function scoregraph () {
+  
+  if($('#classify').val() === 'ALL') {
+    $.get(script_root + '/top/10', function( data ) {
+      var places = $.parseJSON(JSON.stringify(data));
+
+      places = places['places'];
+      if (Object.keys(places).length === 0 ){
+          $('#score-graph').html('<div class="text-center"><h3 class="spinner-error">No solves yet</h3></div>'); // Replace spinner
+          return;
+      }
+
+      var teams = Object.keys(places);
+      var traces = [];
+      for(var i = 0; i < teams.length; i++){
           var team_score = [];
           var times = [];
-          for(var j = 0; j < scores[teams[i]].length; j++){
-              team_score.push(scores[teams[i]][j].value);
-              var date = moment(scores[teams[i]][j].time * 1000);
+          for(var j = 0; j < places[teams[i]]['solves'].length; j++){
+              team_score.push(places[teams[i]]['solves'][j].value);
+              var date = moment(places[teams[i]]['solves'][j].time * 1000);
               times.push(date.toDate());
           }
           team_score = cumulativesum(team_score);
           var trace = {
-            x: times,
-            y: team_score,
-            mode: 'lines+markers',
-            name: teams[i]
-          }
+              x: times,
+              y: team_score,
+              mode: 'lines+markers',
+              name: places[teams[i]]['name']
+          };
           traces.push(trace);
-        }
-    
-        var layout = {
-          title: 'Top 10 Players (' + $('#classify').val() +')'
-        };
-        console.log(traces);
+      }
 
-        Plotly.newPlot('score-graph', traces, layout);
-        $('#score-graph').show()
+      traces.sort(function(a, b) {
+          var scorediff = b['y'][b['y'].length - 1] - a['y'][a['y'].length - 1];
+          if(!scorediff) {
+              return a['x'][a['x'].length - 1] - b['x'][b['x'].length - 1];
+          }
+          return scorediff;
       });
-    } else {
-      $.get(script_root + '/top/10', function(data) {
-        var scores = $.parseJSON(JSON.stringify(data));
-        scores = scores['scores'];
-        if(Object.keys(scores).length === 0) {
-          return;
+
+      var layout = {
+          title: 'Top 10 Teams',
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0)'
+      };
+      console.log(traces);
+
+      $('#score-graph').empty(); // Remove spinners
+      Plotly.newPlot('score-graph', traces, layout);
+    });
+  }
+  else {
+    $.get(script_root + '/top/10/'  + $('#classify').val(), function( data ) {
+        var places = $.parseJSON(JSON.stringify(data));
+
+        places = places['places'];
+        if (Object.keys(places).length === 0 ){
+            $('#score-graph').html('<div class="text-center"><h3 class="spinner-error">No solves yet</h3></div>'); // Replace spinner
+            return;
         }
 
         var teams = Object.keys(places);
         var traces = [];
-        for(var i = 0; i < teams.length; i++) {
-          var team_score = [];
-          var times = [];
-          for(var j = 0; j < places[teams[i]]['solves'].length; j++){
-            team_score.push(places[teams[i]]['solves'][j].value);
-            var date = moment(places[teams[i]]['solves'][j].time * 1000);
-            times.push(date.toDate());
-          }
-          team_score = cumulativesum(team_score);
-          var trace = {
-            x: times,
-            y: team_score,
-            mode: 'lines+markers',
-            name: places[teams[i]]['name']
-          };
-          traces.push(trace);
+        for(var i = 0; i < teams.length; i++){
+            var team_score = [];
+            var times = [];
+            for(var j = 0; j < places[teams[i]]['solves'].length; j++){
+                team_score.push(places[teams[i]]['solves'][j].value);
+                var date = moment(places[teams[i]]['solves'][j].time * 1000);
+                times.push(date.toDate());
+            }
+            team_score = cumulativesum(team_score);
+            var trace = {
+                x: times,
+                y: team_score,
+                mode: 'lines+markers',
+                name: places[teams[i]]['name']
+            };
+            traces.push(trace);
         }
 
+        traces.sort(function(a, b) {
+            var scorediff = b['y'][b['y'].length - 1] - a['y'][a['y'].length - 1];
+            if(!scorediff) {
+                return a['x'][a['x'].length - 1] - b['x'][b['x'].length - 1];
+            }
+            return scorediff;
+        });
+
         var layout = {
-          title: 'Top 10 Players',
+            title: 'Top 10 Teams',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)'
         };
         console.log(traces);
 
+        $('#score-graph').empty(); // Remove spinners
         Plotly.newPlot('score-graph', traces, layout);
-        $('#score-graph').show()
-    }
+    });
+  }
 }
 
 function update() {
