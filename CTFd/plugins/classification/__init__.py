@@ -6,16 +6,152 @@ from CTFd import utils
 from CTFd.models import db, Teams, Solves, Awards, Challenges
 from CTFd.plugins import register_plugin_asset
 from CTFd.utils import override_template
-from models import Classification, create_db
+
+
+from sqlalchemy import ForeignKey
+from CTFd.models import db
+import re
+import requests
+from HTMLParser import HTMLParser
+import logging
+import os
+import re
+import time
+
+
+from flask import current_app as app, render_template, request, redirect, url_for, session, Blueprint
+from itsdangerous import TimedSerializer, BadTimeSignature, Signer, BadSignature
+from passlib.hash import bcrypt_sha256
+from sqlalchemy import ForeignKey
+from werkzeug.routing import Rule
+
+from CTFd import utils
+from CTFd.models import db, Teams
+from CTFd.plugins import register_plugin_asset
+
+
+
+
+import datetime
+import hashlib
+import json
+from socket import inet_aton, inet_ntoa
+from struct import unpack, pack, error as struct_error
+from flask import current_app as app, render_template, request, redirect, jsonify, url_for, Blueprint, session
+from passlib.hash import bcrypt_sha256
+from sqlalchemy.sql import not_
+from CTFd.models import db, Teams, Solves, Awards, Challenges, WrongKeys, Keys, Tags, Files, Tracking, Pages, Config, Unlocks, DatabaseError, Hints, Unlocks
+from CTFd.scoreboard import get_standings
+from CTFd.plugins.challenges import get_chal_class
+
+from sqlalchemy.sql import or_
+
+from CTFd.utils import ctftime, view_after_ctf, authed, unix_time, get_kpm, user_can_view_challenges, is_admin, get_config, get_ip, is_verified, ctf_started, ctf_ended, ctf_name, admins_only
+# from CTFd.models import Hint
+from CTFd.admin import admin
+from CTFd.challenges import challenges
+from CTFd.scoreboard import scoreboard, scores, get_standings
+
+from flask_sqlalchemy import SQLAlchemy
+from passlib.hash import bcrypt_sha256
+from sqlalchemy.exc import DatabaseError
+from sqlalchemy import String
+from CTFd.plugins import register_plugin_asset
+from CTFd import utils
+
+from CTFd.plugins.challenges import get_chal_class
+
+#-=-=-=-=-=-Classes-=-=-=-=-=-
+class Classification(db.Model):
+    __table_args__ = {'extend_existing': True} 
+    id = db.Column(db.Integer, ForeignKey('teams.id'), primary_key=True)
+    teamid = db.Column(db.Integer)
+    classification = db.Column(db.String(128))
+
+    def __init__(self,id, classification):
+        self.id = id
+        self.teamid = id
+        self.classification = classification
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def load(app):
-    create_db(app)
-    dir_path = os.path.dirname(os.path.realpath(__file__))
+    app.db.create_all()
 
+    classification = Blueprint('classification', __name__, template_folder='./')
+               
+    dir_path = os.path.dirname(os.path.realpath(__file__))
     template_path = os.path.join(dir_path, 'scoreboard.html')
     override_template('scoreboard.html', open(template_path).read())
 
-    register_plugin_asset(app, asset_path='/plugins/ctfd-classified-scoreboard-plugin/scoreboard.js')
+    register_plugin_asset(app, asset_path='/plugins/classification/config.js')
+
+
+    # Server side Configuration menu
+    @classification.route('/admin/plugins/classification/', methods=['GET', 'POST'])
+    @utils.admins_only
+    def classified():
+        if request.method == 'POST':
+            teamid = request.form['id']
+            previous = Classification.query.filter_by(id=teamid)
+            for x in previous:
+                db.session.delete(x)
+
+            errors = []
+            classification = request.form['classification']
+
+            if classification == 'other':
+                classification = request.form['new_classification']
+            
+
+            classify = Classification(int(teamid), classification)
+            db.session.add(classify)
+            db.session.commit()
+            db.session.close()
+
+
+        if request.method == 'GET' or request.method == 'POST':
+
+            classifications = Classification.query.all()
+            
+            teams=[]
+            scoring_teams=[]
+            standings = get_standings()
+
+            # Competitors with a score
+            for i, x in enumerate(standings):
+                pushed = 0
+                for classification in classifications:
+                    if classification.teamid == x.teamid:
+                        teams.append({'id': x.teamid, 'name': x.name, 'class': classification.classification , 'score': x.score})
+                        pushed = 1
+                scoring_teams.append(x.teamid)
+                if(pushed == 0):
+                    teams.append({'id': x.teamid, 'name': x.name, 'class': '' , 'score': x.score})
+            
+            # Competitors with/without a score (limited to only without a score)
+            for team in db.session.query(Teams.name, Teams.id, Teams.admin).all():
+                if(team.admin == False):
+                    pushed = 0
+                    for classification in classifications:
+                        if classification.teamid == team.id:
+                            if(team.id not in scoring_teams):
+                                teams.append({'id': team.id, 'name': team.name, 'class': classification.classification , 'score': ''})
+                                pushed = 1
+                    if(pushed == 0 and (team.id not in scoring_teams)):
+                        teams.append({'id': team.id, 'name': team.name, 'class': '' , 'score': ''})
+            
+            classf=[]
+            for clas in classifications:
+                classf.append(clas.classification)
+            classf=list(sorted(set(classf)))
+        
+            db.session.close()
+
+            return render_template('config.html', teams=teams, classifications=classf)
+
+
+
 
     def get_standings(admin=False, count=None, classification=None):
         scores = db.session.query(
@@ -173,3 +309,8 @@ def load(app):
         
     app.view_functions['scoreboard.scoreboard_view'] = scoreboard_view
     app.view_functions['scoreboard.scores'] = scores
+
+    app.register_blueprint(classification)
+
+
+    
