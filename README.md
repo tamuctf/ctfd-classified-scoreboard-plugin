@@ -1,5 +1,5 @@
 # CTFd-Classified-Scoreboard-Plugin
-### V1.0.2 BETA
+### V1.0.3 BETA
 This is a CTFd platform plugin that enables the scoreboard to show scores by classification.
 
 ### *DISCLAIMER*
@@ -25,6 +25,9 @@ The leftmost coloumn in the configuration page is the User's ID number, not nece
 
 ### Client-Side Scoreboard
 When the users log into the page and score any points they will be present in the scoreboard in both the "All" category and the category they are assigned to.
+
+*Note:*
+Currently, users will only be presented with the scoreboard that corresponds to their classification with TAMUctf specific classifications. Currently, this is planned to be fixed.
 
 Just simply select the classification you'd like to see in the dropdown at the top left of the scoreboard page, and only the users in that category will appear (expect in the case that "All" is select).
 
