@@ -38,11 +38,16 @@ input[type="checkbox"] { margin: 0px !important; position: relative; top: 5px; }
                   <option value="public">Public</option>
                 {% endif %}
                 {% if current_user_class == "U1" or current_user_class == "U2" or current_user_class == "U3" or current_user_class == "U4" or current_user_class == "G5" or current_user_class == "G6" or current_user_class == "G7" %}
-                <option value="tamu" selected="selected">TAMU</option>
+                  <option value="tamu" selected="selected">TAMU</option>
                 {% else %}
-                <option value="tamu">TAMU</option>
+                  <option value="tamu">TAMU</option>
                 {% endif %}
-                <option value="tamum">DoD/ROTC</option>
+
+                {% if current_user_other != 0 %}
+                  <option value="tamum" selected="selected">DoD/ROTC</option>
+                {% else %}
+                  <option value="tamum">DoD/ROTC</option>
+                {% endif %}
 
             {% else %}
                 {% for classification in classifications %}
@@ -85,11 +90,27 @@ input[type="checkbox"] { margin: 0px !important; position: relative; top: 5px; }
                 <option value="U4">U4</option>
                 {% endif %}
             </select>
-            <select id="tamum" class="form-control" onchange="update3()" style="display: none;float: right;">
+            {% if current_user_other != 0 %}
+            <select id="tamum" class="form-control" onchange="update3()" style="float: right;">
+            {% else %}
+              <select id="tamum" class="form-control" onchange="update3()" style="display: none;float: right;">
+            {% endif %}
                 <option value="tamum">Corps/ROTC/DoD</option>
+                {% if current_user_other == 3 or current_user_other == 8, current_user_other == 10,current_user_other == 15 %}
+                <option value="tamumc" selected="selected">Corps</option>
+                {% else %}
                 <option value="tamumc">Corps</option>
+                {% endif %}
+                {% if current_user_other == 5 or current_user_other == 8, current_user_other == 12,current_user_other == 15 %}
+                <option value="tamumr" selected="selected">Non-TAMU ROTC / USMA</option>
+                {% else %}
                 <option value="tamumr">Non-TAMU ROTC / USMA</option>
+                {% endif %}
+                {% if current_user_other == 7 or current_user_other == 12, current_user_other == 10,current_user_other == 15 %}
+                <option value="tamumd" selected="selected">DoD</option>
+                {% else %}
                 <option value="tamumd">DoD</option>
+                {% endif %}
             </select>
         {% endif %}
         </td></tr></table>
