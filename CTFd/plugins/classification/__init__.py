@@ -7,6 +7,14 @@ from CTFd.models import db, Teams, Solves, Awards, Challenges
 from CTFd.plugins import register_plugin_asset
 from CTFd.utils import override_template
 
+# -=- For TAMUctf, but can be left in without any problems -=-   
+try:
+    from CTFd.plugins.register.__init__ import tamu_test
+except ImportError:
+    print "\n-=-=-=-=-=-=-=-=-=-=-=-\
+           \n\nAuto-Register Application not installed.\
+           \n\n-=-=-=-=-=-=-=-=-=-=-=-\n"
+# -=-
 
 from sqlalchemy import ForeignKey
 from CTFd.models import db
@@ -30,8 +38,6 @@ from CTFd.models import db, Teams
 from CTFd.plugins import register_plugin_asset
 
 
-
-
 import datetime
 import hashlib
 import json
@@ -39,9 +45,8 @@ from socket import inet_aton, inet_ntoa
 from struct import unpack, pack, error as struct_error
 from flask import current_app as app, render_template, request, redirect, jsonify, url_for, Blueprint, session
 from passlib.hash import bcrypt_sha256
-from sqlalchemy.sql import not_
+from sqlalchemy.sql import not_,or_
 from CTFd.models import db, Teams, Solves, Awards, Challenges, WrongKeys, Keys, Tags, Files, Tracking, Pages, Config, Unlocks, DatabaseError, Hints, Unlocks
-from CTFd.scoreboard import get_standings
 from CTFd.plugins.challenges import get_chal_class
 
 from sqlalchemy.sql import or_
@@ -67,11 +72,15 @@ class Classification(db.Model):
     id = db.Column(db.Integer, ForeignKey('teams.id'), primary_key=True)
     teamid = db.Column(db.Integer)
     classification = db.Column(db.String(128))
+    other = db.Column(db.Integer)
 
     def __init__(self,id, classification):
         self.id = id
         self.teamid = id
         self.classification = classification
+
+    def add_other(self, other):
+        self.other = other
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -125,6 +134,7 @@ def load(app):
                     if classification.teamid == x.teamid:
                         teams.append({'id': x.teamid, 'name': x.name, 'class': classification.classification , 'score': x.score})
                         pushed = 1
+                        break
                 scoring_teams.append(x.teamid)
                 if(pushed == 0):
                     teams.append({'id': x.teamid, 'name': x.name, 'class': '' , 'score': x.score})
@@ -145,13 +155,18 @@ def load(app):
             for clas in classifications:
                 classf.append(clas.classification)
             classf=list(sorted(set(classf)))
+
+            # -=- For TAMUctf, but can be left in without any problems -=-   
+            try:
+                tamu_test()
+                tamu = ["tamu"]
+            except:
+                tamu = []
+            # -=-
         
             db.session.close()
 
-            return render_template('config.html', teams=teams, classifications=classf)
-
-
-
+            return render_template('config.html', teams=teams, classifications=classf, tamu=tamu)
 
     def get_standings(admin=False, count=None, classification=None):
         scores = db.session.query(
@@ -202,9 +217,59 @@ def load(app):
                             .order_by(sumscores.columns.score.desc(), sumscores.columns.date)
 
         if classification and count:
-            standings = standings_query.filter(Classification.classification == classification).limit(count).all()
+            # -=- For TAMUctf, but can be left in without any problems -=-  
+            try:
+                tamu_test()
+                c=Classification
+                if(classification=="tamu"):
+                    standings = standings_query.filter(or_(c.classification == "U0", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5", c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).limit(count).all()
+                elif(classification=="tamug"):
+                    standings = standings_query.filter(or_(c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).limit(count).all()
+                elif(classification=="tamuu"):
+                    standings = standings_query.filter(or_(c.classification == "U0", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5")).limit(count).all()
+                elif(classification=="U4"):
+                    standings = standings_query.filter(or_(c.classification == "U4", c.classification == "U5")).limit(count).all()
+                elif(classification=="tamum"):
+                    standings = standings_query.filter(or_(c.other == 3, c.other == 5, c.other == 7, c.other == 8, c.other == 12, c.other == 10, c.other == 15)).limit(count).all()
+                elif(classification=="tamumc"):
+                    standings = standings_query.filter(or_(c.other == 3, c.other == 8, c.other == 10, c.other == 15)).limit(count).all()
+                elif(classification=="tamumr"):
+                    standings = standings_query.filter(or_(c.other == 5, c.other == 8, c.other == 12, c.other == 15)).limit(count).all()
+                elif(classification=="tamumd"):
+                    standings = standings_query.filter(or_(c.other == 7, c.other == 12, c.other == 10, c.other == 15)).limit(count).all()
+                else:
+                    standings = standings_query.filter(Classification.classification == classification).limit(count).all()
+            except:
+                standings = standings_query.filter(Classification.classification == classification).limit(count).all()
+             #-=-            
     	elif classification:
-            standings = standings_query.filter(Classification.classification == classification).all()
+            # -=- For TAMUctf, but can be left in without any problems -=-  
+            try:
+                tamu_test()
+                c=Classification
+                if(classification=="tamu"):
+                    standings = standings_query.filter(or_(c.classification == "U0", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5", c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).all()
+                elif(classification=="tamug"):
+                    standings = standings_query.filter(or_(c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).all()
+                elif(classification=="tamuu"):
+                    standings = standings_query.filter(or_(c.classification == "U01", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5")).all()
+                elif(classification=="tamuu"):
+                    standings = standings_query.filter(or_(c.classification == "U4", c.classification == "U5")).all()
+                elif(classification=="tamum"):
+                    standings = standings_query.filter(or_(c.other == 3, c.other == 5, c.other == 7, c.other == 8, c.other == 12, c.other == 10, c.other == 15)).all()
+                elif(classification=="tamumc"):
+                    standings = standings_query.filter(or_(c.other == 3, c.other == 8, c.other == 10, c.other == 15)).all()
+                elif(classification=="tamumr"):
+                    standings = standings_query.filter(or_(c.other == 5, c.other == 8, c.other == 12, c.other == 15)).all()
+                elif(classification=="tamumd"):
+                    standings = standings_query.filter(or_(c.other == 7, c.other == 12, c.other == 10, c.other == 15)).all()
+                else:
+                    standings = standings_query.filter(Classification.classification == classification).all()
+            except:
+                standings = standings_query.filter(Classification.classification == classification).all()
+             #-=- 
+
+            
         elif count:
             standings = standings_query.limit(count).all()
         else:
@@ -219,13 +284,31 @@ def load(app):
         db.session.close()
 
         classifications = sorted(classifications, reverse=True)
+        
+        
+        # -=- For TAMUctf, but can be left in without any problems -=-  
+        try:
+            tamu_test()
+            tamu = ["tamu"]
+        except:
+            tamu = []
+         #-=-
+        try:
+          current_user_class = Classification.query.filter_by(id=session.get('id')).first().classification
+        except:
+          current_user_class = "ALL"
+        try:
+          current_user_other = Classification.query.filter_by(id=session.get('id')).first().other
+        except:
+          current_user_other = 0
 
         if utils.get_config('view_scoreboard_if_authed') and not utils.authed():
             return redirect(url_for('auth.login', next=request.path))
         if utils.hide_scores():
             return render_template('scoreboard.html', errors=['Scores are currently hidden'])
         standings = get_standings()
-        return render_template('scoreboard.html', teams=standings, score_frozen=utils.is_scoreboard_frozen(), classifications=classifications)
+
+        return render_template('scoreboard.html', teams=standings, score_frozen=utils.is_scoreboard_frozen(), classifications=classifications, tamu=tamu, current_user_class=current_user_class, current_user_other=current_user_other)
 
     def scores():
         json = {'standings': []}
@@ -265,8 +348,9 @@ def load(app):
         if count > 20 or count < 0:
             count = 10
 
-        standings = get_standings(count=count, classification=classification)
 
+        standings = get_standings(count=count, classification=classification)
+        
         team_ids = [team.teamid for team in standings]
 
         solves = Solves.query.filter(Solves.teamid.in_(team_ids))
