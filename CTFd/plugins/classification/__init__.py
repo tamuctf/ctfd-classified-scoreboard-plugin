@@ -35,7 +35,7 @@ from werkzeug.routing import Rule
 
 from CTFd import utils
 from CTFd.models import db, Teams
-from CTFd.plugins import register_plugin_asset
+from CTFd.plugins import register_plugin_assets_directory
 
 
 import datetime
@@ -66,6 +66,11 @@ from CTFd import utils
 
 from CTFd.plugins.challenges import get_chal_class
 
+#-----------Global, set to what you need----------
+initialBrackets = ["tamu", "Public", "Dod/Rotc"]
+initialClassifications = ["tamu", "public", "tamum" ]
+#---------------------------------------
+
 #-=-=-=-=-=-Classes-=-=-=-=-=-
 class Classification(db.Model):
     __table_args__ = {'extend_existing': True} 
@@ -84,6 +89,18 @@ class Classification(db.Model):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+class Bracket(db.Model):
+    __table_args__ = {'extend_existing': True} 
+    id = db.Column(db.Integer, primary_key=True)
+    bracketid = db.Column(db.String(128))
+    parentbracketid = db.Column(db.Integer)
+    classification = db.Column(db.String(128))
+
+    # add child argument here
+    def __init__(self, bracketName, classificationName):
+        self.bracketid = bracketName
+        self.classification = classificationName
+
 def load(app):
     app.db.create_all()
 
@@ -93,11 +110,12 @@ def load(app):
     template_path = os.path.join(dir_path, 'scoreboard.html')
     override_template('scoreboard.html', open(template_path).read())
 
-    register_plugin_asset(app, asset_path='/plugins/classification/config.js')
+    # register_plugin_assets_directory(app, base_path='/plugins/classification/static/')
+    register_plugin_asset(app, asset_path='/plugins/classification/static/config.js')
+    register_plugin_asset(app, asset_path='/plugins/classification/static/config.css')
 
-
-    # Server side Configuration menu
-    @classification.route('/admin/plugins/classification/', methods=['GET', 'POST'])
+    # Server side Configuration menu, honestly that post clasifeid should be made into a function
+    @classification.route('/admin/plugins/classification', methods=['GET', 'POST'])
     @utils.admins_only
     def classified():
         if request.method == 'POST':
@@ -118,15 +136,13 @@ def load(app):
             db.session.commit()
             db.session.close()
 
-
         if request.method == 'GET' or request.method == 'POST':
-
             classifications = Classification.query.all()
             
             teams=[]
             scoring_teams=[]
+            brackets=[]
             standings = get_standings()
-
             # Competitors with a score
             for i, x in enumerate(standings):
                 pushed = 0
@@ -156,6 +172,16 @@ def load(app):
                 classf.append(clas.classification)
             classf=list(sorted(set(classf)))
 
+
+            if Bracket.query.first() is None:
+                for x, y in zip(initialBrackets, initialClassifications):
+                    new_bracket = Bracket(x, y)
+                    db.session.add(new_bracket)
+                db.session.commit()
+            existingBrackets = Bracket.query.all()
+            for x in existingBrackets:
+                brackets.append({'id': x.id, 'name': x.bracketid, 'class': x.classification, 'parent': x.parentbracketid})
+
             # -=- For TAMUctf, but can be left in without any problems -=-   
             try:
                 tamu_test()
@@ -163,10 +189,10 @@ def load(app):
             except:
                 tamu = []
             # -=-
-        
+            
             db.session.close()
 
-            return render_template('config.html', teams=teams, classifications=classf, tamu=tamu)
+        return render_template('config.html', teams=teams, classifications=classf, brackets=brackets )
 
     def get_standings(admin=False, count=None, classification=None):
         scores = db.session.query(
@@ -322,6 +348,71 @@ def load(app):
         for i, x in enumerate(standings):
             json['standings'].append({'pos': i + 1, 'id': x.teamid, 'team': x.name, 'score': int(x.score)})
         return jsonify(json)
+
+    def emptyBrackets():
+        if Bracket.query.first() is None:
+            brackets = initialBrackets
+            for x, y in zip(initialBrackets, initialClassifications):
+                new_bracket = Bracket(x, y)
+                db.session.add(new_bracket)
+            db.session.commit()
+
+    def addParentBracket(child, parent):
+        if child:
+            childBracket = Bracket.query.filter_by(id=child).one()
+            childBracket.parentbracketid = parent
+            db.session.commit()
+
+    def deleteAllChildren(parent):
+        childBracket = Bracket.query.filter_by(parentbracketid=int(parent))
+        for x in childBracket:
+            x.parentbracketid = None
+        db.session.commit()
+
+    @classification.route('/admin/plugins/classification/create', methods=['POST'])
+    @utils.admins_only
+    def create_bracket():
+        if request.method == 'POST':
+            new_bracket = request.form['new_bracket']
+            create_classification = request.form['create_classification']
+            child = request.form['childId']
+            bracket = Bracket(new_bracket, create_classification)
+            db.session.add(bracket)
+            db.session.commit()
+            addParentBracket(child, bracket.id)
+            db.session.close()
+        return redirect('/admin/plugins/classification')
+
+    @classification.route('/admin/plugins/classification/delete', methods=['POST'])
+    @utils.admins_only
+    def delete_bracket():
+        if request.method == 'POST':
+            d_bracket = request.form['submitDelete']
+            bracket = Bracket.query.filter_by(id=d_bracket).one()
+            deleteAllChildren(d_bracket)
+            db.session.delete(bracket)
+            db.session.commit()
+            db.session.close()
+            emptyBrackets()
+        return redirect('/admin/plugins/classification')
+
+    @classification.route('/admin/plugins/classification/edit', methods=['POST'])
+    @utils.admins_only
+    def edit_bracket():
+        if request.method == 'POST':
+            new_name = request.form['bracket_name']
+            e_bracket = request.form['editId']
+            child = request.form['childId']
+            bracket = Bracket.query.filter_by(id=e_bracket).one()
+            if bracket.bracketid is not new_name:
+                bracket.bracketid = new_name
+                db.session.commit()
+            if child:
+                if int(e_bracket) is not int(child):
+                    addParentBracket(child, e_bracket)
+            db.session.close()
+        return redirect('/admin/plugins/classification')
+
 
     @app.route('/scores/<classification>')
     def classified_scores(classification):
