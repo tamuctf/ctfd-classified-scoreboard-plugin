@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 
 {% block stylesheets %}
+{% endblock %}
+{% block content %}
+<head>
+<link rel="stylesheet" href="{{ request.script_root }}/plugins/classification/static/config.css" type="text/css">
+</head>
 <style>
 td { text-align:center; left: 0px }
 .checkbox { margin: 0px !important; }
@@ -15,12 +20,7 @@ input[type="checkbox"] { margin: 0px !important; position: relative; top: 5px; }
    height: 45px;
   font-size: 125%;
 }
-
-
 </style>
-{% endblock %}
-
-{% block content %}
 
 <div class="jumbotron home">
     <div class="container">
@@ -28,94 +28,18 @@ input[type="checkbox"] { margin: 0px !important; position: relative; top: 5px; }
     </div>
 </div>
 <div class="container main-container">
-    <div class="row" style="display: inline-block !important;white-space: nowrap;float: left;"><table><tr><td>
-        <select id="classify" class="form-control" onchange="update()">
-                <option value="ALL">ALL</option>
-            {% if tamu is defined %}
-                {% if current_user_class == "public" %}
-                  <option value="public" selected="selected">Public</option>
-                {% else %}
-                  <option value="public">Public</option>
-                {% endif %}
-                {% if current_user_class == "U1" or current_user_class == "U2" or current_user_class == "U3" or current_user_class == "U4" or current_user_class == "G5" or current_user_class == "G6" or current_user_class == "G7" %}
-                  <option value="tamu" selected="selected">TAMU</option>
-                {% else %}
-                  <option value="tamu">TAMU</option>
-                {% endif %}
+    <div class="row" style="display: inline-block !important;white-space: nowrap;float: left;">
+<table>
 
-                {% if current_user_other != 0 %}
-                  <option value="tamum" selected="selected">DoD/ROTC</option>
-                {% else %}
-                  <option value="tamum">DoD/ROTC</option>
-                {% endif %}
+</table>   
+</div>
 
-            {% else %}
-                {% for classification in classifications %}
-                    <option value="{{ classification }}">{{ classification }}</option>
-                {% endfor %}
-            {% endif %}
-        </select></td><td>
-        {% if tamu is defined %}
-
-                {% if current_user_class == "U1" or current_user_class == "U2" or current_user_class == "U3" or current_user_class == "U4" or current_user_class == "G5" or current_user_class == "G6" or current_user_class == "G7" %}
-                <select id="tamu" class="form-control" onchange="update2()" style="float: right;">
-                {% else %}
-                <select id="tamu" class="form-control" onchange="update2()" style="display: none;float: right;">
-                {% endif %}
-            
-                <option value="tamu">All TAMU</option>
-                {% if current_user_class == "G5" or current_user_class == "G6" or current_user_class == "G7" %}
-                <option value="tamug" selected="selected">Grad</option>
-                {% else %}
-                <option value="tamug">Grad</option>
-                {% endif %}
-                {% if current_user_class == "U1"%}
-                <option value="U1" selected="selected">U1</option>
-                {% else %}
-                <option value="U1">U1</option>
-                {% endif %}
-                {% if current_user_class == "U2" %}
-                <option value="U2" selected="selected">U2</option>
-                {% else %}
-                <option value="U2">U2</option>
-                {% endif %}
-                {% if current_user_class == "U3" %}
-                <option value="U3"  selected="selected">U3</option>
-                {% else %}
-                <option value="U3">U3</option>
-                {% endif %}
-                {% if current_user_class == "U4" or current_user_class == "U5" %}
-                <option value="U4"  selected="selected">U4</option>
-                {% else %}
-                <option value="U4">U4</option>
-                {% endif %}
-            </select>
-            {% if current_user_other != 0 %}
-            <select id="tamum" class="form-control" onchange="update3()" style="float: right;">
-            {% else %}
-              <select id="tamum" class="form-control" onchange="update3()" style="display: none;float: right;">
-            {% endif %}
-                <option value="tamum">Corps/ROTC/DoD</option>
-                {% if current_user_other == 3 or current_user_other == 8, current_user_other == 10,current_user_other == 15 %}
-                <option value="tamumc" selected="selected">Corps</option>
-                {% else %}
-                <option value="tamumc">Corps</option>
-                {% endif %}
-                {% if current_user_other == 5 or current_user_other == 8, current_user_other == 12,current_user_other == 15 %}
-                <option value="tamumr" selected="selected">Non-TAMU ROTC / USMA</option>
-                {% else %}
-                <option value="tamumr">Non-TAMU ROTC / USMA</option>
-                {% endif %}
-                {% if current_user_other == 7 or current_user_other == 12, current_user_other == 10,current_user_other == 15 %}
-                <option value="tamumd" selected="selected">DoD</option>
-                {% else %}
-                <option value="tamumd">DoD</option>
-                {% endif %}
-            </select>
-        {% endif %}
-        </td></tr></table>
-        
-    </div>
+<!-- select id="classify" class="form-control" onchange="update()"
+ -->
+<div  class="container main-container">
+    <input type="text" name = "classify" id = "classify">
+    <button type="button" onclick="update()">Try</button>
+</div>
     {% if errors %}
     <div class="container main-container">
         <div id='errors' class="row">

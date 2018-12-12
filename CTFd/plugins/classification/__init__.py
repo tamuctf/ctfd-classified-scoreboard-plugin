@@ -95,6 +95,7 @@ class Bracket(db.Model):
     bracketid = db.Column(db.String(128))
     parentbracketid = db.Column(db.Integer)
     classification = db.Column(db.String(128))
+    isparent = db.Column(db.Boolean)
 
     # add child argument here
     def __init__(self, bracketName, classificationName):
@@ -172,6 +173,7 @@ def load(app):
                 classf.append(clas.classification)
             classf=list(sorted(set(classf)))
 
+# can/should be made into function
 
             if Bracket.query.first() is None:
                 for x, y in zip(initialBrackets, initialClassifications):
@@ -180,16 +182,8 @@ def load(app):
                 db.session.commit()
             existingBrackets = Bracket.query.all()
             for x in existingBrackets:
-                brackets.append({'id': x.id, 'name': x.bracketid, 'class': x.classification, 'parent': x.parentbracketid})
-
-            # -=- For TAMUctf, but can be left in without any problems -=-   
-            try:
-                tamu_test()
-                tamu = ["tamu"]
-            except:
-                tamu = []
-            # -=-
-            
+                brackets.append({'id': x.id, 'name': x.bracketid, 'class': x.classification, 'parent': x.parentbracketid, 'isparent': x.isparent})
+ #--           
             db.session.close()
 
         return render_template('config.html', teams=teams, classifications=classf, brackets=brackets )
@@ -243,82 +237,47 @@ def load(app):
                             .order_by(sumscores.columns.score.desc(), sumscores.columns.date)
 
         if classification and count:
-            # -=- For TAMUctf, but can be left in without any problems -=-  
-            try:
-                tamu_test()
-                c=Classification
-                if(classification=="tamu"):
-                    standings = standings_query.filter(or_(c.classification == "U0", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5", c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).limit(count).all()
-                elif(classification=="tamug"):
-                    standings = standings_query.filter(or_(c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).limit(count).all()
-                elif(classification=="tamuu"):
-                    standings = standings_query.filter(or_(c.classification == "U0", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5")).limit(count).all()
-                elif(classification=="U4"):
-                    standings = standings_query.filter(or_(c.classification == "U4", c.classification == "U5")).limit(count).all()
-                elif(classification=="tamum"):
-                    standings = standings_query.filter(or_(c.other == 3, c.other == 5, c.other == 7, c.other == 8, c.other == 12, c.other == 10, c.other == 15)).limit(count).all()
-                elif(classification=="tamumc"):
-                    standings = standings_query.filter(or_(c.other == 3, c.other == 8, c.other == 10, c.other == 15)).limit(count).all()
-                elif(classification=="tamumr"):
-                    standings = standings_query.filter(or_(c.other == 5, c.other == 8, c.other == 12, c.other == 15)).limit(count).all()
-                elif(classification=="tamumd"):
-                    standings = standings_query.filter(or_(c.other == 7, c.other == 12, c.other == 10, c.other == 15)).limit(count).all()
-                else:
-                    standings = standings_query.filter(Classification.classification == classification).limit(count).all()
-            except:
-                standings = standings_query.filter(Classification.classification == classification).limit(count).all()
-             #-=-            
-    	elif classification:
-            # -=- For TAMUctf, but can be left in without any problems -=-  
-            try:
-                tamu_test()
-                c=Classification
-                if(classification=="tamu"):
-                    standings = standings_query.filter(or_(c.classification == "U0", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5", c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).all()
-                elif(classification=="tamug"):
-                    standings = standings_query.filter(or_(c.classification == "G5", c.classification == "G6", c.classification == "G7", c.classification == "G8", c.classification == "G9")).all()
-                elif(classification=="tamuu"):
-                    standings = standings_query.filter(or_(c.classification == "U01", c.classification == "U1", c.classification == "U2", c.classification == "U3",c.classification == "U4", c.classification == "U5")).all()
-                elif(classification=="tamuu"):
-                    standings = standings_query.filter(or_(c.classification == "U4", c.classification == "U5")).all()
-                elif(classification=="tamum"):
-                    standings = standings_query.filter(or_(c.other == 3, c.other == 5, c.other == 7, c.other == 8, c.other == 12, c.other == 10, c.other == 15)).all()
-                elif(classification=="tamumc"):
-                    standings = standings_query.filter(or_(c.other == 3, c.other == 8, c.other == 10, c.other == 15)).all()
-                elif(classification=="tamumr"):
-                    standings = standings_query.filter(or_(c.other == 5, c.other == 8, c.other == 12, c.other == 15)).all()
-                elif(classification=="tamumd"):
-                    standings = standings_query.filter(or_(c.other == 7, c.other == 12, c.other == 10, c.other == 15)).all()
-                else:
-                    standings = standings_query.filter(Classification.classification == classification).all()
-            except:
-                standings = standings_query.filter(Classification.classification == classification).all()
-             #-=- 
+            allBrackets = []
+            classificationsLeft = []
 
-            
-        elif count:
-            standings = standings_query.limit(count).all()
+            c=Classification
+            allBrackets.append(classification)
+            classificationsLeft.append(classification)
+            while True:
+                if len(classificationsLeft) > 0:
+                    parentBracket = Bracket.query.filter_by(classification=classificationsLeft.pop())
+                    for p in parentBracket:
+                        child = Bracket.query.filter_by(parentbracketid=p.id)
+                        for nested in child:
+                            allBrackets.append(nested.classification)
+                            classificationsLeft.append(nested.classification)
+                else:
+                    standings = standings_query.filter(c.classification.in_(allBrackets)).limit(count).all()
+                    break    
         else:
+            print("KNOWKNWOKNWOKWNOKN")
             standings = standings_query.all()
 
         return standings
 
     def scoreboard_view():
         classifications = []
+        brackets = []
         for classification in db.session.query(Classification.classification).distinct():
             classifications.append(classification[0])
         db.session.close()
 
         classifications = sorted(classifications, reverse=True)
         
-        
-        # -=- For TAMUctf, but can be left in without any problems -=-  
-        try:
-            tamu_test()
-            tamu = ["tamu"]
-        except:
-            tamu = []
-         #-=-
+        if Bracket.query.first() is None:
+            for x, y in zip(initialBrackets, initialClassifications):
+                new_bracket = Bracket(x, y)
+                db.session.add(new_bracket)
+                db.session.commit()
+        existingBrackets = Bracket.query.all()
+        for x in existingBrackets:
+            brackets.append({'id': x.id, 'name': x.bracketid, 'class': x.classification, 'parent': x.parentbracketid, 'isparent': x.isparent})
+
         try:
           current_user_class = Classification.query.filter_by(id=session.get('id')).first().classification
         except:
@@ -334,7 +293,7 @@ def load(app):
             return render_template('scoreboard.html', errors=['Scores are currently hidden'])
         standings = get_standings()
 
-        return render_template('scoreboard.html', teams=standings, score_frozen=utils.is_scoreboard_frozen(), classifications=classifications, tamu=tamu, current_user_class=current_user_class, current_user_other=current_user_other)
+        return render_template('scoreboard.html', teams=standings, score_frozen=utils.is_scoreboard_frozen(), classifications=classifications, brackets=brackets, current_user_class=current_user_class, current_user_other=current_user_other)
 
     def scores():
         json = {'standings': []}
@@ -361,12 +320,14 @@ def load(app):
         if child:
             childBracket = Bracket.query.filter_by(id=child).one()
             childBracket.parentbracketid = parent
+            childBracket.isparent = None
             db.session.commit()
 
     def deleteAllChildren(parent):
         childBracket = Bracket.query.filter_by(parentbracketid=int(parent))
         for x in childBracket:
             x.parentbracketid = None
+            x.isparent = True
         db.session.commit()
 
     @classification.route('/admin/plugins/classification/create', methods=['POST'])
@@ -380,6 +341,7 @@ def load(app):
             db.session.add(bracket)
             db.session.commit()
             addParentBracket(child, bracket.id)
+            bracket.isparent = True
             db.session.close()
         return redirect('/admin/plugins/classification')
 
@@ -408,7 +370,7 @@ def load(app):
                 bracket.bracketid = new_name
                 db.session.commit()
             if child:
-                if int(e_bracket) is not int(child):
+                if (int(e_bracket) is not int(child)) and (int(child) is not int(bracket.parentbracketid)):
                     addParentBracket(child, e_bracket)
             db.session.close()
         return redirect('/admin/plugins/classification')
