@@ -67,8 +67,8 @@ from CTFd import utils
 from CTFd.plugins.challenges import get_chal_class
 
 #-----------Global, set to what you need----------
-initialBrackets = ["tamu", "Public", "Dod/Rotc"]
-initialClassifications = ["tamu", "public", "tamum" ]
+initialBrackets = []
+initialClassifications = []
 #---------------------------------------
 
 #-=-=-=-=-=-Classes-=-=-=-=-=-
@@ -185,7 +185,7 @@ def load(app):
                 brackets.append({'id': x.id, 'name': x.bracketid, 'class': x.classification, 'parent': x.parentbracketid, 'isparent': x.isparent})
  #--           
             db.session.close()
-
+        #print("Classifications: ", brackets)
         return render_template('config.html', teams=teams, classifications=classf, brackets=brackets )
 
     def get_standings(admin=False, count=None, classification=None):
@@ -236,6 +236,7 @@ def load(app):
                             .filter(Teams.banned == False) \
                             .order_by(sumscores.columns.score.desc(), sumscores.columns.date)
 
+
         if classification and count:
             allBrackets = []
             classificationsLeft = []
@@ -245,19 +246,37 @@ def load(app):
             classificationsLeft.append(classification)
             while True:
                 if len(classificationsLeft) > 0:
-                    parentBracket = Bracket.query.filter_by(classification=classificationsLeft.pop())
+                    parentBracket = Bracket.query.filter_by(bracketid=classificationsLeft.pop())
                     for p in parentBracket:
                         child = Bracket.query.filter_by(parentbracketid=p.id)
                         for nested in child:
-                            allBrackets.append(nested.classification)
-                            classificationsLeft.append(nested.classification)
+                            allBrackets.append(nested.bracketid)
                 else:
                     standings = standings_query.filter(c.classification.in_(allBrackets)).limit(count).all()
                     break    
+
+
+        elif classification:
+            allBrackets = []
+            classificationsLeft = []
+
+            c=Classification
+            allBrackets.append(classification)
+            classificationsLeft.append(classification)
+            while True:
+                if len(classificationsLeft) > 0:
+                    parentBracket = Bracket.query.filter_by(bracketid=classificationsLeft.pop())
+                    for p in parentBracket:
+                        child = Bracket.query.filter_by(parentbracketid=p.id)
+                        for nested in child:
+                            allBrackets.append(nested.bracketid)
+                else:
+                    standings = standings_query.filter(c.classification.in_(allBrackets)).all()
+                    break
+
         else:
             print("KNOWKNWOKNWOKWNOKN")
             standings = standings_query.all()
-
         return standings
 
     def scoreboard_view():
@@ -292,7 +311,9 @@ def load(app):
         if utils.hide_scores():
             return render_template('scoreboard.html', errors=['Scores are currently hidden'])
         standings = get_standings()
-
+        print("Standings: ", standings)
+        print("Classifications: ", classifications)
+        print("Brackets: ", brackets)
         return render_template('scoreboard.html', teams=standings, score_frozen=utils.is_scoreboard_frozen(), classifications=classifications, brackets=brackets, current_user_class=current_user_class, current_user_other=current_user_other)
 
     def scores():
@@ -370,7 +391,10 @@ def load(app):
                 bracket.bracketid = new_name
                 db.session.commit()
             if child:
-                if (int(e_bracket) is not int(child)) and (int(child) is not int(bracket.parentbracketid)):
+                print("e_bracket: ", e_bracket)
+                print("child: ", child)
+                print("bracket.parentbracketid: ", dir(bracket))
+                if bracket.parentbracketid is None or ((int(e_bracket) is not int(child)) and (int(child) is not int(bracket.parentbracketid))):
                     addParentBracket(child, e_bracket)
             db.session.close()
         return redirect('/admin/plugins/classification')
