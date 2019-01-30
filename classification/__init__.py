@@ -110,6 +110,8 @@ def load(app):
     dir_path = os.path.dirname(os.path.realpath(__file__))
     template_path = os.path.join(dir_path, 'scoreboard.html')
     override_template('scoreboard.html', open(template_path).read())
+    profile_path = os.path.join(dir_path, 'profile.html')
+    override_template('profile.html', open(profile_path).read())
 
     # register_plugin_assets_directory(app, base_path='/plugins/classification/static/')
     register_plugin_asset(app, asset_path='/plugins/classification/static/config.js')
@@ -467,9 +469,88 @@ def load(app):
             json['places'][i + 1]['solves'] = sorted(json['places'][i + 1]['solves'], key=lambda k: k['time'])
 
         return jsonify(json)
+
+    def profile():
+        if utils.authed():
+            if request.method == "POST":
+                errors = []
+                print("Request Form: ", request.form)
+                name = request.form.get('name').strip()
+                email = request.form.get('email').strip()
+                website = request.form.get('website').strip()
+                affiliation = request.form.get('affiliation').strip()
+                country = request.form.get('country').strip()
+
+                user = Teams.query.filter_by(id=session['id']).first()
+
+                if not utils.get_config('prevent_name_change'):
+                    names = Teams.query.filter_by(name=name).first()
+                    name_len = len(request.form['name']) == 0
+
+                emails = Teams.query.filter_by(email=email).first()
+                valid_email = utils.check_email_format(email)
+
+                if utils.check_email_format(name) is True:
+                    errors.append('Team name cannot be an email address')
+
+                if ('password' in request.form.keys() and not len(request.form['password']) == 0) and \
+                        (not bcrypt_sha256.verify(request.form.get('confirm').strip(), user.password)):
+                    errors.append("Your old password doesn't match what we have.")
+                if not valid_email:
+                    errors.append("That email doesn't look right")
+                if not utils.get_config('prevent_name_change') and names and name != session['username']:
+                    errors.append('That team name is already taken')
+                if emails and emails.id != session['id']:
+                    errors.append('That email has already been used')
+                if not utils.get_config('prevent_name_change') and name_len:
+                    errors.append('Pick a longer team name')
+                if website.strip() and not utils.validate_url(website):
+                    errors.append("That doesn't look like a valid URL")
+
+                if len(errors) > 0:
+                    return render_template('profile.html', name=name, email=email, website=website,
+                                           affiliation=affiliation, country=country, errors=errors)
+                else:
+                    team = Teams.query.filter_by(id=session['id']).first()
+                    if team.name != name:
+                        if not utils.get_config('prevent_name_change'):
+                            team.name = name
+                            session['username'] = team.name
+                    if team.email != email.lower():
+                        team.email = email.lower()
+                        if utils.get_config('verify_emails'):
+                            team.verified = False
+
+                    if 'password' in request.form.keys() and not len(request.form['password']) == 0:
+                        team.password = bcrypt_sha256.encrypt(request.form.get('password'))
+                    team.website = website
+                    team.affiliation = affiliation
+                    team.country = country
+                    db.session.commit()
+                    db.session.close()
+                    return redirect(url_for('views.profile'))
+            else:
+                user = Teams.query.filter_by(id=session['id']).first()
+                name = user.name
+                email = user.email
+                website = user.website
+                affiliation = user.affiliation
+                country = user.country
+                prevent_name_change = utils.get_config('prevent_name_change')
+                confirm_email = utils.get_config('verify_emails') and not user.verified
+                brackets = Bracket.query.all()
+                user_bracket = Classification.query.filter_by(teamid=user.id).first().classification
+                print("User Bracket", user_bracket) 
+                print("Brackets: ", brackets[0].bracketid)
+                
+                return render_template('profile.html', name=name, email=email, website=website, affiliation=affiliation,
+                                       country=country, prevent_name_change=prevent_name_change, confirm_email=confirm_email, brackets=brackets, user_bracket=user_bracket)
+        else:
+            return redirect(url_for('auth.login'))
         
     app.view_functions['scoreboard.scoreboard_view'] = scoreboard_view
     app.view_functions['scoreboard.scores'] = scores
+    app.view_functions['views.profile'] = profile
 
     app.register_blueprint(classification)
 
