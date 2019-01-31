@@ -87,22 +87,21 @@
 					</label>
 					<input class="form-control" type="text" name="country" id="country-input" value="{% if country %}{{country}}{% endif %}" />
 				</div>
+                <div class="form-group">
+                <label for="classify-input">
+                    Bracket Select
+                </label>
+                  <select style="height: 50px" name="classify" class="form-control" form="profileform">
+                    {% for bracket in brackets %}
+                       <option value="{{ bracket.bracketid }}" name="{{ bracket.bracketid }}" id="classify-input" {% if bracket.bracketid == user_bracket %}selected{% endif %}>{{ bracket.bracketid }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
 				<div class="form-group">
 					<button type="submit" id="submit" tabindex="5" class="btn btn-md btn-primary btn-outlined float-right">Submit</button>
 				</div>
 				<input type="hidden" name="nonce" value="{{ nonce }}">
 			</form>
-            <div class="form-group">
-                <label for="classify-input">
-                    Bracket Select
-                </label>
-                <select class="form-control" form="profileform">
-                     <option value="asdf" name="asdf" id="asdf">asdf</option>
-<!--                  {% for bracket in brackets %}
-                   <option value="{{ bracket.bracketid }}" name="{{ bracket.bracketid }}" id="classify-input">{{ bracket.bracketid }}</option>
-                {% endfor %} -->
-                </select>
-                </div>
 		</div>
 	</div>
 </div>

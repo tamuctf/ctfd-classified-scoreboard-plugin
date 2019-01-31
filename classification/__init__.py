@@ -480,8 +480,10 @@ def load(app):
                 website = request.form.get('website').strip()
                 affiliation = request.form.get('affiliation').strip()
                 country = request.form.get('country').strip()
-
+                bracket = request.form.get('classify').strip()
                 user = Teams.query.filter_by(id=session['id']).first()
+                b = Bracket.query.all()
+                brackets = [brack.bracketid for brack in b]
 
                 if not utils.get_config('prevent_name_change'):
                     names = Teams.query.filter_by(name=name).first()
@@ -506,6 +508,8 @@ def load(app):
                     errors.append('Pick a longer team name')
                 if website.strip() and not utils.validate_url(website):
                     errors.append("That doesn't look like a valid URL")
+                if bracket not in brackets:
+                    errors.append('That is not an existing bracket')
 
                 if len(errors) > 0:
                     return render_template('profile.html', name=name, email=email, website=website,
@@ -526,6 +530,13 @@ def load(app):
                     team.website = website
                     team.affiliation = affiliation
                     team.country = country
+
+                    previous = Classification.query.filter_by(id=team.id)
+                    for x in previous:
+                        db.session.delete(x)
+
+                    classify = Classification(int(team.id), bracket)
+                    db.session.add(classify)
                     db.session.commit()
                     db.session.close()
                     return redirect(url_for('views.profile'))
@@ -538,16 +549,118 @@ def load(app):
                 country = user.country
                 prevent_name_change = utils.get_config('prevent_name_change')
                 confirm_email = utils.get_config('verify_emails') and not user.verified
-                brackets = Bracket.query.all()
+                brackets = Bracket.query.filter(Bracket.bracketid != 'U1', Bracket.bracketid != 'U2',Bracket.bracketid != 'U3',Bracket.bracketid != 'U4',Bracket.bracketid != 'Grad',Bracket.bracketid != 'TAMU').all()
                 user_bracket = Classification.query.filter_by(teamid=user.id).first().classification
-                print("User Bracket", user_bracket) 
-                print("Brackets: ", brackets[0].bracketid)
-                
+                if email.split('@')[-1][-8:] == 'tamu.edu':
+                    brackets = [{'bracketid': user_bracket}]
+ 
                 return render_template('profile.html', name=name, email=email, website=website, affiliation=affiliation,
                                        country=country, prevent_name_change=prevent_name_change, confirm_email=confirm_email, brackets=brackets, user_bracket=user_bracket)
         else:
             return redirect(url_for('auth.login'))
         
+    def get_tamu_class(netid):    
+        try:
+            url = 'https://it.tamu.edu/hdcapps/ldap/index.php'
+            params = {'zone': 'search', 'org': 'people', 'text': netid, 'target': 'searchmailbox'}
+            first_query = requests.get(url, params=params)
+            uid = re.search('uid=[\w]{32}', first_query.text).group(0).split('=')[1]
+            params['uid'] = uid
+            second_query = requests.get(url, params=params)
+            classification = re.search('tamuedupersonclassification</i></td>\\n<td >[\w]{2}', second_query.text).group(0)[-2:]
+            print("Classification: ", classification)
+            
+            if 'G' in classification:
+                classification = 'Grad'
+
+        except:
+            classification = 'Public'
+
+        return classification
+
+    def register():
+        logger = logging.getLogger('regs')
+        if not utils.can_register():
+            return redirect(url_for('auth.login'))
+        if request.method == 'POST':
+            errors = []
+            name = request.form['name']
+            email = request.form['email']
+            password = request.form['password']
+
+            name_len = len(name) == 0
+            names = Teams.query.add_columns('name', 'id').filter_by(name=name).first()
+            emails = Teams.query.add_columns('email', 'id').filter_by(email=email).first()
+            pass_short = len(password) == 0
+            pass_long = len(password) > 128
+            valid_email = utils.check_email_format(request.form['email'])
+            team_name_email_check = utils.check_email_format(name)
+
+            if not valid_email:
+                errors.append("Please enter a valid email address")
+            if names:
+                errors.append('That team name is already taken')
+            if team_name_email_check is True:
+                errors.append('Your team name cannot be an email address')
+            if emails:
+                errors.append('That email has already been used')
+            if pass_short:
+                errors.append('Pick a longer password')
+            if pass_long:
+                errors.append('Pick a shorter password')
+            if name_len:
+                errors.append('Pick a longer team name')
+
+            if len(errors) > 0:
+                return render_template('register.html', errors=errors, name=request.form['name'], email=request.form['email'], password=request.form['password'])
+            else:
+                with app.app_context():
+                    team = Teams(name, email.lower(), password)
+                    db.session.add(team)
+                    db.session.commit()
+                    db.session.flush()
+
+                    session['username'] = team.name
+                    session['id'] = team.id
+                    session['admin'] = team.admin
+                    session['nonce'] = utils.sha512(os.urandom(10))
+
+                    if email.split('@')[-1][-8:] == 'tamu.edu':
+                        classification = get_tamu_class(email.split('@')[0])
+                    else:
+                        classification = 'Public'
+
+                    classify = Classification(int(team.id), classification)
+                    db.session.add(classify)
+                    db.session.commit()
+
+                    if utils.can_send_mail() and utils.get_config('verify_emails'):  # Confirming users is enabled and we can send email.
+                        logger = logging.getLogger('regs')
+                        logger.warn("[{date}] {ip} - {username} registered (UNCONFIRMED) with {email}".format(
+                            date=time.strftime("%m/%d/%Y %X"),
+                            ip=utils.get_ip(),
+                            username=request.form['name'].encode('utf-8'),
+                            email=request.form['email'].encode('utf-8')
+                        ))
+                        utils.verify_email(team.email)
+                        db.session.close()
+                        return redirect(url_for('auth.confirm_user'))
+                    else:  # Don't care about confirming users
+                        if utils.can_send_mail():  # We want to notify the user that they have registered.
+                            utils.sendmail(request.form['email'], "You've successfully registered for {}".format(utils.get_config('ctf_name')))
+
+            logger.warn("[{date}] {ip} - {username} registered with {email}".format(
+                date=time.strftime("%m/%d/%Y %X"),
+                ip=utils.get_ip(),
+                username=request.form['name'].encode('utf-8'),
+                email=request.form['email'].encode('utf-8')
+            ))
+            db.session.close()
+            return redirect(url_for('challenges.challenges_view'))
+        else:
+            return render_template('register.html')
+
+    app.view_functions['auth.register'] = register
     app.view_functions['scoreboard.scoreboard_view'] = scoreboard_view
     app.view_functions['scoreboard.scores'] = scores
     app.view_functions['views.profile'] = profile
