@@ -20,6 +20,15 @@ input[type="checkbox"] { margin: 0px !important; position: relative; top: 5px; }
    height: 45px;
   font-size: 125%;
 }
+.dropdown-submenu {
+  position: relative;
+}
+
+.dropdown-submenu .dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -1px;
+}
 </style>
 
 <div class="jumbotron home">
@@ -37,8 +46,25 @@ input[type="checkbox"] { margin: 0px !important; position: relative; top: 5px; }
 <!-- select id="classify" class="form-control" onchange="update()"
  -->
 <div  class="container main-container">
-    <input type="text" name = "classify" id = "classify">
-    <button type="button" onclick="update()">Try</button>
+    <div class="dropdown">
+    <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown">Brackets
+    <span class="caret"></span></button>
+    <ul class="dropdown-menu">
+      {% for bracket in brackets %}
+      <li><a onclick="update('{{ bracket.name }}')" tabindex="-1" name="classify" id="classify">{{ bracket.name }}</a></li>
+      {% endfor %}
+<!--
+      <li class="dropdown-submenu">
+        <a class="test" tabindex="-1" href="#">New dropdown <span class="caret"></span></a>
+        <ul class="dropdown-menu">
+          <li><a tabindex="-1" href="#">2nd level dropdown</a></li>
+          <li><a tabindex="-1" href="#">2nd level dropdown</a></li>
+        </ul>
+      </li>
+-->
+    </ul>   
+    <!--<input type="text" name = "classify" id = "classify"> 
+    <button type="button" onclick="update()">Try</button>-->
 </div>
     {% if errors %}
     <div class="container main-container">

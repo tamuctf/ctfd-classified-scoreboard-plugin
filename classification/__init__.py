@@ -67,8 +67,8 @@ from CTFd import utils
 from CTFd.plugins.challenges import get_chal_class
 
 #-----------Global, set to what you need----------
-initialBrackets = ["tamu", "Public", "Dod/Rotc"]
-initialClassifications = ["tamu", "public", "tamum" ]
+initialBrackets = []
+initialClassifications = []
 #---------------------------------------
 
 #-=-=-=-=-=-Classes-=-=-=-=-=-
@@ -110,6 +110,8 @@ def load(app):
     dir_path = os.path.dirname(os.path.realpath(__file__))
     template_path = os.path.join(dir_path, 'scoreboard.html')
     override_template('scoreboard.html', open(template_path).read())
+    profile_path = os.path.join(dir_path, 'profile.html')
+    override_template('profile.html', open(profile_path).read())
 
     # register_plugin_assets_directory(app, base_path='/plugins/classification/static/')
     register_plugin_asset(app, asset_path='/plugins/classification/static/config.js')
@@ -185,7 +187,7 @@ def load(app):
                 brackets.append({'id': x.id, 'name': x.bracketid, 'class': x.classification, 'parent': x.parentbracketid, 'isparent': x.isparent})
  #--           
             db.session.close()
-
+        #print("Classifications: ", brackets)
         return render_template('config.html', teams=teams, classifications=classf, brackets=brackets )
 
     def get_standings(admin=False, count=None, classification=None):
@@ -236,6 +238,7 @@ def load(app):
                             .filter(Teams.banned == False) \
                             .order_by(sumscores.columns.score.desc(), sumscores.columns.date)
 
+
         if classification and count:
             allBrackets = []
             classificationsLeft = []
@@ -245,19 +248,37 @@ def load(app):
             classificationsLeft.append(classification)
             while True:
                 if len(classificationsLeft) > 0:
-                    parentBracket = Bracket.query.filter_by(classification=classificationsLeft.pop())
+                    parentBracket = Bracket.query.filter_by(bracketid=classificationsLeft.pop())
                     for p in parentBracket:
                         child = Bracket.query.filter_by(parentbracketid=p.id)
                         for nested in child:
-                            allBrackets.append(nested.classification)
-                            classificationsLeft.append(nested.classification)
+                            allBrackets.append(nested.bracketid)
                 else:
                     standings = standings_query.filter(c.classification.in_(allBrackets)).limit(count).all()
                     break    
+
+
+        elif classification:
+            allBrackets = []
+            classificationsLeft = []
+
+            c=Classification
+            allBrackets.append(classification)
+            classificationsLeft.append(classification)
+            while True:
+                if len(classificationsLeft) > 0:
+                    parentBracket = Bracket.query.filter_by(bracketid=classificationsLeft.pop())
+                    for p in parentBracket:
+                        child = Bracket.query.filter_by(parentbracketid=p.id)
+                        for nested in child:
+                            allBrackets.append(nested.bracketid)
+                else:
+                    standings = standings_query.filter(c.classification.in_(allBrackets)).all()
+                    break
+
         else:
             print("KNOWKNWOKNWOKWNOKN")
             standings = standings_query.all()
-
         return standings
 
     def scoreboard_view():
@@ -292,7 +313,9 @@ def load(app):
         if utils.hide_scores():
             return render_template('scoreboard.html', errors=['Scores are currently hidden'])
         standings = get_standings()
-
+        print("Standings: ", standings)
+        print("Classifications: ", classifications)
+        print("Brackets: ", brackets)
         return render_template('scoreboard.html', teams=standings, score_frozen=utils.is_scoreboard_frozen(), classifications=classifications, brackets=brackets, current_user_class=current_user_class, current_user_other=current_user_other)
 
     def scores():
@@ -370,7 +393,10 @@ def load(app):
                 bracket.bracketid = new_name
                 db.session.commit()
             if child:
-                if (int(e_bracket) is not int(child)) and (int(child) is not int(bracket.parentbracketid)):
+                print("e_bracket: ", e_bracket)
+                print("child: ", child)
+                print("bracket.parentbracketid: ", dir(bracket))
+                if bracket.parentbracketid is None or ((int(e_bracket) is not int(child)) and (int(child) is not int(bracket.parentbracketid))):
                     addParentBracket(child, e_bracket)
             db.session.close()
         return redirect('/admin/plugins/classification')
@@ -443,9 +469,201 @@ def load(app):
             json['places'][i + 1]['solves'] = sorted(json['places'][i + 1]['solves'], key=lambda k: k['time'])
 
         return jsonify(json)
+
+    def profile():
+        if utils.authed():
+            if request.method == "POST":
+                errors = []
+                print("Request Form: ", request.form)
+                name = request.form.get('name').strip()
+                email = request.form.get('email').strip()
+                website = request.form.get('website').strip()
+                affiliation = request.form.get('affiliation').strip()
+                country = request.form.get('country').strip()
+                bracket = request.form.get('classify').strip()
+                user = Teams.query.filter_by(id=session['id']).first()
+                b = Bracket.query.all()
+                brackets = [brack.bracketid for brack in b]
+
+                if not utils.get_config('prevent_name_change'):
+                    names = Teams.query.filter_by(name=name).first()
+                    name_len = len(request.form['name']) == 0
+
+                emails = Teams.query.filter_by(email=email).first()
+                valid_email = utils.check_email_format(email)
+
+                if utils.check_email_format(name) is True:
+                    errors.append('Team name cannot be an email address')
+
+                if ('password' in request.form.keys() and not len(request.form['password']) == 0) and \
+                        (not bcrypt_sha256.verify(request.form.get('confirm').strip(), user.password)):
+                    errors.append("Your old password doesn't match what we have.")
+                if not valid_email:
+                    errors.append("That email doesn't look right")
+                if not utils.get_config('prevent_name_change') and names and name != session['username']:
+                    errors.append('That team name is already taken')
+                if emails and emails.id != session['id']:
+                    errors.append('That email has already been used')
+                if not utils.get_config('prevent_name_change') and name_len:
+                    errors.append('Pick a longer team name')
+                if website.strip() and not utils.validate_url(website):
+                    errors.append("That doesn't look like a valid URL")
+                if bracket not in brackets:
+                    errors.append('That is not an existing bracket')
+
+                if len(errors) > 0:
+                    return render_template('profile.html', name=name, email=email, website=website,
+                                           affiliation=affiliation, country=country, errors=errors)
+                else:
+                    team = Teams.query.filter_by(id=session['id']).first()
+                    if team.name != name:
+                        if not utils.get_config('prevent_name_change'):
+                            team.name = name
+                            session['username'] = team.name
+                    if team.email != email.lower():
+                        team.email = email.lower()
+                        if utils.get_config('verify_emails'):
+                            team.verified = False
+
+                    if 'password' in request.form.keys() and not len(request.form['password']) == 0:
+                        team.password = bcrypt_sha256.encrypt(request.form.get('password'))
+                    team.website = website
+                    team.affiliation = affiliation
+                    team.country = country
+
+                    previous = Classification.query.filter_by(id=team.id)
+                    for x in previous:
+                        db.session.delete(x)
+
+                    classify = Classification(int(team.id), bracket)
+                    db.session.add(classify)
+                    db.session.commit()
+                    db.session.close()
+                    return redirect(url_for('views.profile'))
+            else:
+                user = Teams.query.filter_by(id=session['id']).first()
+                name = user.name
+                email = user.email
+                website = user.website
+                affiliation = user.affiliation
+                country = user.country
+                prevent_name_change = utils.get_config('prevent_name_change')
+                confirm_email = utils.get_config('verify_emails') and not user.verified
+                brackets = Bracket.query.filter(Bracket.bracketid != 'U1', Bracket.bracketid != 'U2',Bracket.bracketid != 'U3',Bracket.bracketid != 'U4',Bracket.bracketid != 'Grad',Bracket.bracketid != 'TAMU').all()
+                user_bracket = Classification.query.filter_by(teamid=user.id).first().classification
+                if email.split('@')[-1][-8:] == 'tamu.edu':
+                    brackets = [{'bracketid': user_bracket}]
+ 
+                return render_template('profile.html', name=name, email=email, website=website, affiliation=affiliation,
+                                       country=country, prevent_name_change=prevent_name_change, confirm_email=confirm_email, brackets=brackets, user_bracket=user_bracket)
+        else:
+            return redirect(url_for('auth.login'))
         
+    def get_tamu_class(netid):    
+        try:
+            url = 'https://it.tamu.edu/hdcapps/ldap/index.php'
+            params = {'zone': 'search', 'org': 'people', 'text': netid, 'target': 'searchmailbox'}
+            first_query = requests.get(url, params=params)
+            uid = re.search('uid=[\w]{32}', first_query.text).group(0).split('=')[1]
+            params['uid'] = uid
+            second_query = requests.get(url, params=params)
+            classification = re.search('tamuedupersonclassification</i></td>\\n<td >[\w]{2}', second_query.text).group(0)[-2:]
+            print("Classification: ", classification)
+            
+            if 'G' in classification:
+                classification = 'Grad'
+
+        except:
+            classification = 'Public'
+
+        return classification
+
+    def register():
+        logger = logging.getLogger('regs')
+        if not utils.can_register():
+            return redirect(url_for('auth.login'))
+        if request.method == 'POST':
+            errors = []
+            name = request.form['name']
+            email = request.form['email']
+            password = request.form['password']
+
+            name_len = len(name) == 0
+            names = Teams.query.add_columns('name', 'id').filter_by(name=name).first()
+            emails = Teams.query.add_columns('email', 'id').filter_by(email=email).first()
+            pass_short = len(password) == 0
+            pass_long = len(password) > 128
+            valid_email = utils.check_email_format(request.form['email'])
+            team_name_email_check = utils.check_email_format(name)
+
+            if not valid_email:
+                errors.append("Please enter a valid email address")
+            if names:
+                errors.append('That team name is already taken')
+            if team_name_email_check is True:
+                errors.append('Your team name cannot be an email address')
+            if emails:
+                errors.append('That email has already been used')
+            if pass_short:
+                errors.append('Pick a longer password')
+            if pass_long:
+                errors.append('Pick a shorter password')
+            if name_len:
+                errors.append('Pick a longer team name')
+
+            if len(errors) > 0:
+                return render_template('register.html', errors=errors, name=request.form['name'], email=request.form['email'], password=request.form['password'])
+            else:
+                with app.app_context():
+                    team = Teams(name, email.lower(), password)
+                    db.session.add(team)
+                    db.session.commit()
+                    db.session.flush()
+
+                    session['username'] = team.name
+                    session['id'] = team.id
+                    session['admin'] = team.admin
+                    session['nonce'] = utils.sha512(os.urandom(10))
+
+                    if email.split('@')[-1][-8:] == 'tamu.edu':
+                        classification = get_tamu_class(email.split('@')[0])
+                    else:
+                        classification = 'Public'
+
+                    classify = Classification(int(team.id), classification)
+                    db.session.add(classify)
+                    db.session.commit()
+
+                    if utils.can_send_mail() and utils.get_config('verify_emails'):  # Confirming users is enabled and we can send email.
+                        logger = logging.getLogger('regs')
+                        logger.warn("[{date}] {ip} - {username} registered (UNCONFIRMED) with {email}".format(
+                            date=time.strftime("%m/%d/%Y %X"),
+                            ip=utils.get_ip(),
+                            username=request.form['name'].encode('utf-8'),
+                            email=request.form['email'].encode('utf-8')
+                        ))
+                        utils.verify_email(team.email)
+                        db.session.close()
+                        return redirect(url_for('auth.confirm_user'))
+                    else:  # Don't care about confirming users
+                        if utils.can_send_mail():  # We want to notify the user that they have registered.
+                            utils.sendmail(request.form['email'], "You've successfully registered for {}".format(utils.get_config('ctf_name')))
+
+            logger.warn("[{date}] {ip} - {username} registered with {email}".format(
+                date=time.strftime("%m/%d/%Y %X"),
+                ip=utils.get_ip(),
+                username=request.form['name'].encode('utf-8'),
+                email=request.form['email'].encode('utf-8')
+            ))
+            db.session.close()
+            return redirect(url_for('challenges.challenges_view'))
+        else:
+            return render_template('register.html')
+
+    app.view_functions['auth.register'] = register
     app.view_functions['scoreboard.scoreboard_view'] = scoreboard_view
     app.view_functions['scoreboard.scores'] = scores
+    app.view_functions['views.profile'] = profile
 
     app.register_blueprint(classification)
 

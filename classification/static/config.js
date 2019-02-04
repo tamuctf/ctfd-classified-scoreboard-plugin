@@ -3,15 +3,17 @@ $(document).ready(function(){
   $('.buttonCondition').prop('disabled', true); 
 var toggler = document.getElementsByClassName("caret");
 var i;
-
+updatescores("");
+scoregraph("");
 });
 
 
 
-function updatescores() {
-  if($('#classify').val() !== "ALL") {
-      $.get(script_root + '/scores/' + $('#classify').val(), function(data) {
+function updatescores(classification) {
+  if(classification != '') {
+      $.get(script_root + '/scores/' + classification, function(data) {
         teams = $.parseJSON(JSON.stringify(data));
+        console.log(teams)
         $('#scoreboard > tbody').empty()
         for (var i = 0; i < teams['standings'].length; i++) {
           row = "<tr><td>{0}</td><td><a href='/team/{1}'>{2}</a></td><td>{3}</td></tr>".format(i+1, teams['standings'][i].id, htmlentities(teams['standings'][i].team), teams['standings'][i].score)
@@ -30,8 +32,9 @@ function updatescores() {
   }
 }
 
-function scoregraph () {
-  if($('#classify').val() === 'ALL') {
+function scoregraph (classification) {
+  console.log(classification)
+  if(classification == '') {
     $.get(script_root + '/top/10', function( data ) {
       var places = $.parseJSON(JSON.stringify(data));
 
@@ -79,7 +82,7 @@ function scoregraph () {
       Plotly.newPlot('score-graph', traces, layout);
     });
   } else {
-    $.get(script_root + '/top/10/'  + $('#classify').val(), function( data ) {
+    $.get(script_root + '/top/10/'  + classification, function( data ) {
         var places = $.parseJSON(JSON.stringify(data));
 
         places = places['places'];
@@ -387,9 +390,9 @@ function scoregraph3 () {
 
 
 
-function update() {
-  updatescores();
-  scoregraph();
+function update(classification) {
+  updatescores(classification);
+  scoregraph(classification);
 }
 
 function update2() {

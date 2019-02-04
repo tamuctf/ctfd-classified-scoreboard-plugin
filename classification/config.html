@@ -34,8 +34,8 @@
                         <label>Classification</label>
                         <select class="combobox " name="classification" required onchange="if (this.value=='other'){document.getElementById('new_classification').style.visibility='visible'}else {document.getElementById('new_classification').style.visibility='hidden'};">
                             <option value="" selected="selected">--</option>
-                            {% for class in classifications %}
-                                <option value="{{ class }}">{{ class }}</option>
+                            {% for class in brackets %}
+                                <option value="{{ class.name }}">{{ class.name }}</option>
                             {% endfor %}
                             <option value="other">other</option>
                         </select>
